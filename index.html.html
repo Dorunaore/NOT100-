@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOT100養成アプリ EVOLUTION</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', 'Inter', sans-serif; }
+        .version-button { transition: all 0.2s ease-in-out; }
+        .version-button.active { background-color: #facc15; color: #1f2937; font-weight: 700; transform: scale(1.05); }
+        #app-container .grid-container { display: grid; gap: 1px; }
+        #app-container .piece { width: 80%; height: 80%; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); transition: transform 0.2s; cursor: pointer; position: relative; z-index: 10; }
+        #app-container .attacker { background-color: #e53e3e; border: 2px solid #f56565; }
+        #app-container .goalkeeper { background-color: #3182ce; border: 2px solid #63b3ed; }
+        #app-container .decoy { background-color: #f7fafc; border: 2px solid #a0aec0; color: #2d3748; opacity: 0.8; }
+        #app-container .possible-move { background-color: rgba(250, 204, 21, 0.7) !important; border-radius: 4px; }
+        #app-container .cell { aspect-ratio: 1 / 1; display: flex; justify-content: center; align-items: center; font-size: 8px; color: #a0aec0; background-color: #2f855a; border: 1px solid #2c7a7b; position: relative; }
+        #app-container .goal-text-container { background-color: #f7fafc !important; color: #718096 !important; font-weight: bold; }
+        #app-container .btn-inactive { opacity: 0.5; background-color: #4a5568 !important; cursor: not-allowed; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center min-h-screen p-4">
+    <div class="w-full max-w-7xl mx-auto">
+        <header class="text-center mb-6"><h1 class="text-3xl md:text-4xl font-bold text-yellow-300">NOT100養成アプリ EVOLUTION</h1><p class="text-gray-400 mt-2">理論の進化を、その手で追体験する。</p></header>
+        <div class="flex flex-col md:flex-row gap-6">
+            <aside class="w-full md:w-1/3 lg:w-1/4"><div class="bg-gray-800 p-4 rounded-xl shadow-lg"><h2 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">バージョン選択</h2><div id="version-selector" class="space-y-2"></div></div><div class="bg-gray-800 p-4 rounded-xl shadow-lg mt-6"><h2 class="text-xl font-bold mb-4 border-b border-gray-600 pb-2">このVerでの「気づき」</h2><div id="insights" class="text-gray-300 space-y-3 leading-relaxed"></div></div></aside>
+            <main id="app-container" class="w-full md:w-2/3 lg:w-3/4 bg-gray-800 rounded-xl shadow-lg flex items-center justify-center p-4 min-h-[500px]"><div class="text-center text-gray-500"><p>左のメニューからバージョンを選択してください。</p></div></main>
+        </div>
+    </div>
+    <script type="module">
+        const versions = {
+            'v1.2': { title: 'v1.2: 対称性の罠', insights: `<p><strong>発見：</strong>同じ能力、同じ条件、同じ縦列からのスタートでは、攻撃側は絶対に勝てない。</p><p><strong>教訓：</strong>勝負は、対峙する前の『初期アドバンテージ』がいかに重要か。</p>`, factory: createV1_2 },
+            'v1.4': { title: 'v1.4: マルチステップ導入', insights: `<p><strong>導入：</strong>1〜3マス動ける『マルチステップ』を実装し、ドリブルの「緩急」を表現。</p><p><strong>教訓：</strong>相手の判断を迷わせる、囮となる味方や『別の脅威』の必要性を痛感する。</p>`, factory: createV1_4 },
+            'v1.7': { title: 'v1.7: 4マスアドバンテージ', insights: `<p><strong>発見：</strong>試行錯誤の末、相手を詰ませるには『4マス』の初期アドバンテージが必要不可欠であると判明。</p><p><strong>教訓：</strong>勝利は、意図的に作られた『構造的優位性』から生まれる。</p>`, factory: createV1_7 },
+            'v1.9': { title: 'v1.9: パスという革命', insights: `<p><strong>導入：</strong>純粋な1v1の限界から、ついに『味方（おとり）』と『パス』を導入。</p><p><strong>教訓：</strong>初めて、意図的に『選択肢の優位性』を作り出す駆け引きが可能になった。</p>`, factory: createV1_9 },
+            'v2.1': { title: 'v2.1: 複数の脅威', insights: `<p><strong>導入：</strong>再び1v1に回帰し、『シュート』と『ループ』を実装。</p><p><strong>教訓：</strong>ドリブルとシュート選択による、より現実的な駆け引きが生まれた。<br><small>（ループはGKが前に出て、十分な距離がある時にボタンが光ります）</small></p>`, factory: createV2_1 },
+            'v3.1': { title: 'v3.1: 最終形態', insights: `<p><strong>導入：</strong>シュート成功条件を、GKとの「距離と角度」に応じて変化させ、AIも刷新。</p><p><strong>教訓：</strong>ドリブル、パス、シュートの全ての選択肢が、絶妙なバランスで機能する最終形態。</p>`, factory: createV3_1 },
+        };
+        const versionSelector = document.getElementById('version-selector');
+        const insightsContainer = document.getElementById('insights');
+        const appContainer = document.getElementById('app-container');
+        function loadVersion(versionKey) {
+            appContainer.innerHTML = '';
+            document.querySelectorAll('.version-button').forEach(btn => btn.classList.toggle('active', btn.dataset.version === versionKey));
+            const version = versions[versionKey];
+            if (version) { insightsContainer.innerHTML = version.insights; version.factory(appContainer); }
+        }
+        function init() {
+            Object.keys(versions).forEach(key => {
+                const version = versions[key];
+                const button = document.createElement('button');
+                button.textContent = version.title; button.dataset.version = key;
+                button.className = 'version-button w-full text-left px-4 py-2 bg-gray-700 rounded-md hover:bg-yellow-500 hover:text-gray-800';
+                button.addEventListener('click', () => loadVersion(key));
+                versionSelector.appendChild(button);
+            });
+            insightsContainer.innerHTML = '<p>左のメニューからバージョンを選択してください。</p>';
+        }
+        function createAppFactory(config) {
+            return function(container) {
+                container.innerHTML = `
+                    <div class="w-full h-full flex flex-col justify-center items-center">
+                        <div class="w-full max-w-4xl mx-auto bg-gray-900/50 rounded-2xl p-4 sm:p-6 shadow-2xl border border-gray-700 relative">
+                            <div class="flex justify-between items-start mb-4">
+                                <div><h1 class="text-xl sm:text-2xl font-bold text-white">${config.title}</h1><p class="text-gray-400 text-sm sm:text-base">${config.subtitle}</p></div>
+                                <div id="button-container" class="flex space-x-2">${config.buttons || ''}<button id="resetButton" class="px-3 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">リセット</button></div>
+                            </div>
+                            <div id="board" class="grid-container bg-green-800 border-2 border-gray-700 rounded-lg p-1 shadow-lg" style="grid-template-columns: repeat(${config.COLS}, minmax(0, 1fr));"></div>
+                            <div class="mt-4 flex justify-between items-center"><div id="status" class="text-base sm:text-lg font-semibold text-yellow-300">🔴 あなたの番です</div></div>
+                            <div id="win-modal" class="absolute inset-0 bg-black bg-opacity-80 flex-col justify-center items-center text-center p-8 rounded-2xl hidden opacity-0" style="transition: opacity 0.3s ease-in-out; z-index: 50;">
+                                <h2 id="win-title" class="text-4xl md:text-6xl font-extrabold mb-4 text-yellow-300"></h2><p id="win-message" class="text-lg md:text-xl text-gray-200 mb-8"></p><button id="modal-reset-button" class="px-8 py-4 bg-yellow-400 text-gray-900 font-bold rounded-xl shadow-lg text-2xl hover:bg-yellow-300">もう一度</button>
+                            </div>
+                        </div>
+                    </div>`;
+                const { boardElement, statusElement, resetButton, winModal, winTitle, winMessage, modalResetButton } = {
+                    boardElement: container.querySelector('#board'), statusElement: container.querySelector('#status'), resetButton: container.querySelector('#resetButton'),
+                    winModal: container.querySelector('#win-modal'), winTitle: container.querySelector('#win-title'), winMessage: container.querySelector('#win-message'), modalResetButton: container.querySelector('#modal-reset-button')
+                };
+                let state = JSON.parse(JSON.stringify(config.initialState));
+                let gameActive = true, isPlayerTurn = true;
+                function createBoard() {
+                    boardElement.innerHTML = '';
+                    for (let r = 0; r < config.ROWS; r++) {
+                        for (let c = 0; c < config.COLS; c++) {
+                            const cell = document.createElement('div');
+                            cell.className = 'cell';
+                            if (r === config.ROWS - 1 && c >= Math.floor((config.COLS - 4) / 2) && c < Math.ceil((config.COLS + 4) / 2)) {
+                                cell.classList.add('goal-text-container');
+                                cell.textContent = 'GOAL'[(c - Math.floor((config.COLS - 4) / 2))];
+                            }
+                            cell.dataset.row = r; cell.dataset.col = c;
+                            boardElement.appendChild(cell);
+                        }
+                    }
+                    renderPieces();
+                    config.updateButtons?.({ ...state, isPlayerTurn, gameActive }, getButtonElements());
+                }
+                function renderPieces() {
+                    boardElement.querySelectorAll('.piece').forEach(p => p.remove());
+                    config.pieceTypes.forEach(type => {
+                        const pos = state[type.id];
+                        if (!pos) return;
+                        const cell = boardElement.querySelector(`[data-row='${pos.row}'][data-col='${pos.col}']`);
+                        if (cell) {
+                            const piece = document.createElement('div');
+                            piece.className = `piece ${type.className}`;
+                            if(type.label) piece.textContent = type.label;
+                            if (type.clickable && isPlayerTurn) piece.addEventListener('click', () => handlePieceClick(type.id));
+                            cell.appendChild(piece);
+                        }
+                    });
+                }
+                function handlePieceClick(pieceId) {
+                    if (!isPlayerTurn || !gameActive || !config.isPlayerPiece(pieceId)) return;
+                    clearHighlights();
+                    showPossibleMoves({id: pieceId, pos: state[pieceId]});
+                }
+                function showPossibleMoves(movingPiece) {
+                    const moves = config.getValidMoves(movingPiece, state);
+                    moves.forEach(({ row, col }) => {
+                        const cell = boardElement.querySelector(`[data-row='${row}'][data-col='${col}']`);
+                        if (cell) {
+                            cell.classList.add('possible-move');
+                            cell.addEventListener('click', handleMoveClick, { once: true });
+                        }
+                    });
+                }
+                function handleMoveClick(event) {
+                    if (!isPlayerTurn || !gameActive) return;
+                    const row = parseInt(event.currentTarget.dataset.row);
+                    const col = parseInt(event.currentTarget.dataset.col);
+                    state[config.getPlayerPieceId()] = { row, col };
+                    endPlayerTurn();
+                }
+                function endPlayerTurn(runAi = true) {
+                    isPlayerTurn = false; clearHighlights();
+                    if(runAi && config.runTurnEndTasks) state = config.runTurnEndTasks(state);
+                    renderPieces();
+                    config.updateButtons?.({ ...state, isPlayerTurn, gameActive }, getButtonElements());
+                    if (runAi && gameActive) {
+                        const winStatus = config.checkWinCondition(state);
+                        if (winStatus.isEnd) return handleEndGame(winStatus);
+                        statusElement.textContent = '🔵 相手の思考中...';
+                        setTimeout(makeAiMove, 500);
+                    }
+                }
+                function makeAiMove() {
+                    if (!gameActive) return;
+                    state = config.makeAiMove(state); isPlayerTurn = true; renderPieces();
+                    const winStatus = config.checkWinCondition(state);
+                    if (winStatus.isEnd) return handleEndGame(winStatus);
+                    statusElement.textContent = '🔴 あなたの番です';
+                    config.updateButtons?.({ ...state, isPlayerTurn, gameActive }, getButtonElements());
+                }
+                function handleEndGame(status) {
+                    gameActive = false; winTitle.textContent = status.title; winMessage.textContent = status.message;
+                    winModal.classList.remove('hidden');
+                    setTimeout(() => winModal.classList.add('opacity-100'), 10);
+                    config.updateButtons?.({ ...state, isPlayerTurn, gameActive }, getButtonElements());
+                }
+                function clearHighlights() {
+                    boardElement.querySelectorAll('.possible-move').forEach(cell => {
+                        cell.classList.remove('possible-move');
+                        const newCell = cell.cloneNode(true);
+                        cell.parentNode.replaceChild(newCell, cell);
+                    });
+                }
+                function getButtonElements() {
+                    const elements = {};
+                    if(container.querySelector('#passButton')) elements.pass = container.querySelector('#passButton');
+                    if(container.querySelector('#grounderShootButton')) elements.grounder = container.querySelector('#grounderShootButton');
+                    if(container.querySelector('#loopShootButton')) elements.loop = container.querySelector('#loopShootButton');
+                    return elements;
+                }
+                function setupActionButtons() {
+                     if(config.actions) {
+                        config.actions.forEach(action => {
+                            const btn = container.querySelector(`#${action.id}`);
+                            if(btn) btn.addEventListener('click', () => {
+                                if(btn.classList.contains('btn-inactive')) return;
+                                const result = action.handler(state);
+                                if(result.isEnd) { handleEndGame(result); endPlayerTurn(false); } 
+                                else { state = result.newState; endPlayerTurn(); }
+                            });
+                        })
+                     }
+                }
+                function resetGame() {
+                    state = JSON.parse(JSON.stringify(config.initialState));
+                    gameActive = true; isPlayerTurn = true;
+                    statusElement.textContent = '🔴 あなたの番です';
+                    winModal.classList.add('hidden', 'opacity-0');
+                    createBoard();
+                }
+                resetButton.addEventListener('click', resetGame);
+                modalResetButton.addEventListener('click', resetGame);
+                setupActionButtons();
+                createBoard();
+            }
+        }
+        const baseConfig = {
+             ROWS: 21, COLS: 19,
+             getPlayerPieceId: () => 'attacker', isPlayerPiece: (id) => id === 'attacker',
+             checkWinCondition: (state) => {
+                if(!state.attacker || !state.goalkeeper) return {isEnd: false};
+                if (state.attacker.row === state.goalkeeper.row && state.attacker.col === state.goalkeeper.col) return { isEnd: true, title: 'LOSE...', message: 'GKに捕まりました。' };
+                if (state.attacker.row >= 18) {
+                    const isGkBlocking = Math.abs(state.attacker.col - state.goalkeeper.col) <= 2 && state.goalkeeper.row >= state.attacker.row;
+                    if(!isGkBlocking) return { isEnd: true, title: 'GOAL!', message: 'シュートコースを確保しゴール！' };
+                }
+                return { isEnd: false };
+             },
+             getValidMoves: (movingPiece, state, maxMove) => {
+                const moves = new Set();
+                const otherPieces = Object.values(state).filter(p => p.id !== movingPiece.id);
+                for (let r = movingPiece.pos.row - maxMove; r <= movingPiece.pos.row + maxMove; r++) {
+                    for (let c = movingPiece.pos.col - maxMove; c <= movingPiece.pos.col + maxMove; c++) {
+                        if (r < 0 || r >= 21 || c < 0 || c >= 19) continue;
+                        if (r === movingPiece.pos.row && c === movingPiece.pos.col) continue;
+                        let isBlocked = otherPieces.some(p => p.row === r && p.col === c);
+                        if (movingPiece.id === 'goalkeeper' && state.attacker && state.attacker.row === r && state.attacker.col === c) {
+                             isBlocked = false;
+                        }
+                        if(!isBlocked) moves.add(JSON.stringify({ row: r, col: c }));
+                    }
+                }
+                return Array.from(moves).map(JSON.parse);
+            },
+        };
+        const simpleGkAi = (maxMove) => (state) => {
+            const moves = baseConfig.getValidMoves({id: 'goalkeeper', pos: state.goalkeeper}, state, maxMove);
+            const captureMove = moves.find(m => m.row === state.attacker.row && m.col === state.attacker.col);
+            if(captureMove) return { ...state, goalkeeper: captureMove };
+            let bestMove = state.goalkeeper; let minDistance = Infinity;
+            moves.forEach(move => {
+                const dist = Math.hypot(move.row - state.attacker.row, move.col - state.attacker.col);
+                if (dist < minDistance) { minDistance = dist; bestMove = move; }
+            });
+            return { ...state, goalkeeper: bestMove };
+        };
+        function createV1_2(container) {
+            const config = { ...baseConfig, title: 'v1.2: 対称性の罠', subtitle: '1マスずつの移動', pieceTypes: [{ id: 'attacker', className: 'attacker', clickable: true },{ id: 'goalkeeper', className: 'goalkeeper' }],
+                initialState: { attacker: { row: 3, col: 9 }, goalkeeper: { row: 12, col: 9 } },
+                getValidMoves: (movingPiece, state) => baseConfig.getValidMoves(movingPiece, state, 1),
+                makeAiMove: simpleGkAi(1) };
+            createAppFactory(config)(container);
+        }
+        function createV1_4(container) {
+            const config = { ...baseConfig, title: 'v1.4: マルチステップ導入', subtitle: 'ATK:3マス, GK:3マス移動', pieceTypes: [{ id: 'attacker', className: 'attacker', clickable: true },{ id: 'goalkeeper', className: 'goalkeeper' }],
+                initialState: { attacker: { row: 3, col: 9 }, goalkeeper: { row: 12, col: 9 } },
+                getValidMoves: (movingPiece, state) => baseConfig.getValidMoves(movingPiece, state, 3),
+                makeAiMove: simpleGkAi(3) };
+            createAppFactory(config)(container);
+        }
+        function createV1_7(container) {
+            const config = { ...baseConfig, title: 'v1.7: 4マスアドバンテージ', subtitle: 'ATK:3マス, GK:3マス移動', pieceTypes: [{ id: 'attacker', className: 'attacker', clickable: true },{ id: 'goalkeeper', className: 'goalkeeper' }],
+                initialState: { attacker: { row: 3, col: 5 }, goalkeeper: { row: 12, col: 9 } },
+                getValidMoves: (movingPiece, state) => baseConfig.getValidMoves(movingPiece, state, 3),
+                makeAiMove: simpleGkAi(3) };
+            createAppFactory(config)(container);
+        }
+        function createV1_9(container) {
+             const config = { ...baseConfig, title: 'v1.9: パスという革命', subtitle: 'ATK:3マス, GK:3マス, 味方あり',
+                buttons: '<button id="passButton" class="px-3 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700">パス</button>',
+                pieceTypes: [{ id: 'attacker', className: 'attacker', clickable: true, label: 'A' },{ id: 'goalkeeper', className: 'goalkeeper', label: 'G' },{ id: 'decoy', className: 'decoy', clickable: false, label: 'D' }],
+                initialState: { attacker: { row: 3, col: 7 }, goalkeeper: { row: 12, col: 10 }, decoy: { row: 5, col: 15 } },
+                getValidMoves: (movingPiece, state) => baseConfig.getValidMoves(movingPiece, state, 3),
+                runTurnEndTasks: (state) => {
+                    let {row, col} = state.decoy;
+                    if(row < 18) row += 2; if(col > 9) col--; else if (col < 9) col++;
+                    return {...state, decoy: {row, col}};
+                },
+                 actions: [{ id: 'passButton', handler: (state) => ({newState: {...state, attacker: state.decoy, decoy: state.attacker}}) }],
+                makeAiMove: (state) => {
+                    const moves = baseConfig.getValidMoves({id: 'goalkeeper', pos: state.goalkeeper}, state, 3);
+                    const captureMove = moves.find(m => m.row === state.attacker.row && m.col === state.attacker.col);
+                    if(captureMove) return { ...state, goalkeeper: captureMove };
+                    let bestMove = state.goalkeeper; let bestScore = Infinity;
+                    moves.forEach(move => {
+                        const distToAtk = Math.hypot(move.row - state.attacker.row, move.col - state.attacker.col);
+                        const distToDecoy = Math.hypot(move.row - state.decoy.row, move.col - state.decoy.col);
+                        const score = distToAtk * 1.2 + distToDecoy * 0.8;
+                        if (score < bestScore) { bestScore = score; bestMove = move; }
+                    });
+                    return { ...state, goalkeeper: bestMove };
+                }};
+            createAppFactory(config)(container);
+        }
+        function createV2_1(container) {
+            const v2_1_logic = {
+                 buttons: `<button id="grounderShootButton" class="px-3 py-2 bg-teal-500 text-white font-semibold rounded-lg shadow-md hover:bg-teal-600">シュート</button>
+                           <button id="loopShootButton" class="px-3 py-2 bg-pink-600 text-white font-semibold rounded-lg shadow-md hover:bg-pink-700">ループ</button>`,
+                getValidMoves: (movingPiece, state) => baseConfig.getValidMoves(movingPiece, state, 3),
+                canLoopShoot: (state) => {
+                    const distFwGk = Math.hypot(state.attacker.row - state.goalkeeper.row, state.attacker.col - state.goalkeeper.col);
+                    const isGkFarFromGoal = state.goalkeeper.row <= 14;
+                    return distFwGk >= 4 && isGkFarFromGoal;
+                },
+                canGrounderShoot: (state) => {
+                    const GOAL_CENTER_COL = 9, GOAL_WIDTH = 4, GOAL_LINE = 18;
+                    const atk = state.attacker; const gk = state.goalkeeper;
+                    if (gk.row <= atk.row) return false;
+                    const angleToPost1 = Math.atan2(GOAL_LINE - atk.row, (GOAL_CENTER_COL - GOAL_WIDTH / 2) - atk.col);
+                    const angleToPost2 = Math.atan2(GOAL_LINE - atk.row, (GOAL_CENTER_COL + GOAL_WIDTH / 2) - atk.col);
+                    const angleToGk = Math.atan2(gk.row - atk.row, gk.col - atk.col);
+                    const gkReachAngle = Math.atan(1 / Math.hypot(gk.row - atk.row, gk.col - atk.col));
+                    const isGkBlockingWithReach = (angleToGk > Math.min(angleToPost1, angleToPost2) - gkReachAngle && angleToGk < Math.max(angleToPost1, angleToPost2) + gkReachAngle);
+                    return !isGkBlockingWithReach;
+                },
+                 actions: [
+                    { id: 'grounderShootButton', handler: (state) => ({ isEnd: true, title: 'GOAL!', message: 'グラウンダーシュート成功！' }) },
+                    { id: 'loopShootButton', handler: (state) => ({ isEnd: true, title: 'GOAL!', message: 'ループシュート成功！' }) }
+                ],
+                updateButtons: (state, btns) => {
+                    const disable = !state.isPlayerTurn || !state.gameActive;
+                    if(btns.grounder) { btns.grounder.disabled = disable || !v2_1_logic.canGrounderShoot(state); btns.grounder.classList.toggle('btn-inactive', btns.grounder.disabled); }
+                    if(btns.loop) { btns.loop.disabled = disable || !v2_1_logic.canLoopShoot(state); btns.loop.classList.toggle('btn-inactive', btns.loop.disabled); }
+                },
+                makeAiMove: simpleGkAi(3) 
+            }
+            const config = { ...baseConfig, ...v2_1_logic, title: 'v2.1: 複数の脅威', subtitle: 'シュートとループの導入',
+                pieceTypes: [{ id: 'attacker', className: 'attacker', clickable: true },{ id: 'goalkeeper', className: 'goalkeeper' }],
+                initialState: { attacker: { row: 3, col: 13 }, goalkeeper: { row: 17, col: 9 } },
+            };
+            createAppFactory(config)(container);
+        }
+        function createV3_1(container) {
+            const v3_1_logic = {
+                 buttons: `<button id="grounderShootButton" class="px-3 py-2 bg-teal-500 text-white font-semibold rounded-lg shadow-md hover:bg-teal-600">シュート</button>
+                           <button id="loopShootButton" class="px-3 py-2 bg-pink-600 text-white font-semibold rounded-lg shadow-md hover:bg-pink-700">ループ</button>`,
+                getValidMoves: (movingPiece, state) => baseConfig.getValidMoves(movingPiece, state, 3),
+                canLoopShoot: (state) => {
+                    const distFwGk = Math.hypot(state.attacker.row - state.goalkeeper.row, state.attacker.col - state.goalkeeper.col);
+                    const isGkFarFromGoal = state.goalkeeper.row <= 14;
+                    return distFwGk >= 4 && isGkFarFromGoal;
+                },
+                canGrounderShoot: (state) => {
+                    const GOAL_CENTER_COL = 9, GOAL_WIDTH = 4, GOAL_LINE = 18;
+                    const atk = state.attacker; const gk = state.goalkeeper;
+                    if (gk.row <= atk.row) return false;
+                    const angleToPost1 = Math.atan2(GOAL_LINE - atk.row, (GOAL_CENTER_COL - GOAL_WIDTH / 2) - atk.col);
+                    const angleToPost2 = Math.atan2(GOAL_LINE - atk.row, (GOAL_CENTER_COL + GOAL_WIDTH / 2) - atk.col);
+                    const angleToGk = Math.atan2(gk.row - atk.row, gk.col - atk.col);
+                    const gkReachAngle = Math.atan(1.5 / Math.hypot(gk.row - atk.row, gk.col - atk.col));
+                    const isGkBlockingWithReach = (angleToGk > Math.min(angleToPost1, angleToPost2) - gkReachAngle && angleToGk < Math.max(angleToPost1, angleToPost2) + gkReachAngle);
+                    return !isGkBlockingWithReach;
+                },
+                 actions: [
+                    { id: 'grounderShootButton', handler: (state) => ({ isEnd: true, title: 'GOAL!', message: 'グラウンダーシュート成功！' }) },
+                    { id: 'loopShootButton', handler: (state) => ({ isEnd: true, title: 'GOAL!', message: 'ループシュート成功！' }) }
+                ],
+                updateButtons: (state, btns) => {
+                    const disable = !state.isPlayerTurn || !state.gameActive;
+                    if(btns.grounder) { btns.grounder.disabled = disable || !v3_1_logic.canGrounderShoot(state); btns.grounder.classList.toggle('btn-inactive', btns.grounder.disabled); }
+                    if(btns.loop) { btns.loop.disabled = disable || !v3_1_logic.canLoopShoot(state); btns.loop.classList.toggle('btn-inactive', btns.loop.disabled); }
+                },
+                makeAiMove: (state) => {
+                    const allMoves = baseConfig.getValidMoves({id: 'goalkeeper', pos: state.goalkeeper}, state, 3);
+                    const safeMoves = allMoves.filter(move => {
+                        const tempState = {attacker: state.attacker, goalkeeper: move};
+                        return !v3_1_logic.canLoopShoot(tempState);
+                    });
+                    
+                    const movesToConsider = safeMoves.length > 0 ? safeMoves : allMoves;
+                    const captureMove = movesToConsider.find(m => m.row === state.attacker.row && m.col === state.attacker.col);
+                    if(captureMove) return { ...state, goalkeeper: captureMove };
+
+                    let bestMove = state.goalkeeper; 
+                    let bestScore = Infinity;
+                    const GOAL_POS = {row: 18, col: 9};
+                    
+                    movesToConsider.forEach(move => {
+                        let score = 0;
+                        const atkToGoalAngle = Math.atan2(GOAL_POS.row - state.attacker.row, GOAL_POS.col - state.attacker.col);
+                        const moveAngle = Math.atan2(move.row - state.attacker.row, move.col - state.attacker.col);
+                        score += Math.abs(atkToGoalAngle - moveAngle) * 5.0; 
+                        const distToAtk = Math.hypot(move.row - state.attacker.row, move.col - state.attacker.col);
+                        score += distToAtk * 1.0;
+                        
+                        if (score < bestScore) { bestScore = score; bestMove = move; }
+                    });
+                    return { ...state, goalkeeper: bestMove };
+                }
+            }
+            const config = { ...baseConfig, ...v3_1_logic, title: 'v3.1: 最終形態', subtitle: '究極の1v1駆け引き',
+                pieceTypes: [{ id: 'attacker', className: 'attacker', clickable: true },{ id: 'goalkeeper', className: 'goalkeeper' }],
+                initialState: { attacker: { row: 3, col: 9 }, goalkeeper: { row: 17, col: 9 } },
+            };
+            createAppFactory(config)(container);
+        }
+        init();
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
